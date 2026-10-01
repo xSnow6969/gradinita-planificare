@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-export default function AiSettings({ onReady }: { onReady: (ready: boolean) => void }) {
+export default function AiSettings({ onReady, variant = "header" }: { onReady: (ready: boolean) => void; variant?: "header" | "inline" }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [configured, setConfigured] = useState(false);
   const [source, setSource] = useState<"server" | "browser" | null>(null);
@@ -43,12 +43,12 @@ export default function AiSettings({ onReady }: { onReady: (ready: boolean) => v
     finally { setBusy(false); }
   }
   return <>
-    <button className="settings-trigger" type="button" onClick={() => { setError(""); dialog.current?.showModal(); }}>✳ <span>Setări AI</span></button>
+    <button className={variant === "inline" ? "settings-trigger settings-trigger-inline" : "settings-trigger"} type="button" onClick={() => { setError(""); dialog.current?.showModal(); }}>AI <span>Setări AI</span></button>
     <dialog className="ai-dialog" ref={dialog} aria-labelledby="ai-title" onClose={() => setApiKey("")}>
       <form onSubmit={save} style={{ display: "grid", gap: 16 }}>
         <h2 id="ai-title" style={{ margin: 0 }}>Configurează asistentul AI</h2>
         <p style={{ margin: 0 }}>{source === "server" ? `${providerLabel(provider)} este configurat pe server. Poți lăsa această fereastră închisă.` : "Introdu cheia ta o singură dată. O reținem în acest browser timp de 30 de zile."}</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
+        <div className="provider-grid">
           <button className="provider-choice" type="button" disabled={source === "server"} onClick={() => setProvider("auto")} aria-pressed={provider === "auto"}><span className="provider-mark">A</span><span><strong>Auto</strong><small>Groq/Gemini</small></span>{provider === "auto" && <span className="provider-selected">Selectat</span>}</button>
           <button className="provider-choice" type="button" disabled={source === "server"} onClick={() => setProvider("claude")} aria-pressed={provider === "claude"}><span className="provider-mark">C</span><span><strong>Claude</strong><small>Anthropic API</small></span>{provider === "claude" && <span className="provider-selected">Selectat</span>}</button>
           <button className="provider-choice" type="button" disabled={source === "server"} onClick={() => setProvider("gemini")} aria-pressed={provider === "gemini"}><span className="provider-mark">G</span><span><strong>Gemini</strong><small>Google AI</small></span>{provider === "gemini" && <span className="provider-selected">Selectat</span>}</button>

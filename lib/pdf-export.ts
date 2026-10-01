@@ -249,6 +249,20 @@ export async function buildPdf(data: PlanificareInput, type: "planificare" | "gh
     }
   }
 
+  function drawAgenda(agenda: PlanificareInput["zile"][number]["agenda"]) {
+    const entries = [
+      ["Obiectivul zilei: ", agenda?.obiectiv],
+      ["Materiale de pregătit: ", agenda?.materiale],
+      ["Notițe: ", agenda?.notite],
+    ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
+    if (!entries.length) return;
+    drawPlain("Agenda zilei", fonts.bold, SMALL_SIZE, false, 2);
+    for (const [label, value] of entries) {
+      drawPlain(`${label}${value}`, fonts.regular, SMALL_SIZE, false, 2);
+    }
+    y -= 4;
+  }
+
   function drawGhid() {
     newPage();
     drawPlain("GHID PRACTIC DE ACTIVITĂȚI", fonts.bold, 14, true, 10);
@@ -262,6 +276,7 @@ export async function buildPdf(data: PlanificareInput, type: "planificare" | "gh
       ensure(45);
       drawPlain(day.ziua.toUpperCase(), fonts.bold, 12, false, 6);
       drawPlain(dayShortGuide(day, data.temaSaptamanala), fonts.regular, SMALL_SIZE, false, 8);
+      drawAgenda(day.agenda);
       for (const activity of day.activitati) {
         ensure(54);
         drawPlain(`${activity.interval} | ${activity.lead.trim()} ${normalizeActivityTitle(activity.rest)}`, fonts.bold, SMALL_SIZE, false, 1);

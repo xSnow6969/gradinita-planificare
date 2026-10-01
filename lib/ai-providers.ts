@@ -13,6 +13,11 @@ let groqKeyCursor = 0;
 
 export interface DayActivities {
   ziua: string;
+  agenda?: {
+    obiectiv?: string;
+    materiale?: string;
+    notite?: string;
+  };
   activitati: {
     interval: string;
     lead: string; // ex: "ADE – DȘ 1:"

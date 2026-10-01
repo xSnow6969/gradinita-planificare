@@ -94,6 +94,7 @@ function DocumentHtmlPreview({ data, type }: { data: PlanificareInput; type: Doc
       {data.zile.map(day => <section key={day.ziua}>
         <h4>{day.ziua}</h4>
         <p className="day-summary">{dayShortGuide(day, data.temaSaptamanala)}</p>
+        <AgendaPreview agenda={day.agenda} />
         {day.activitati.map((activity, index) => <article key={`${day.ziua}-${index}`}>
           <strong>{activity.interval} | {activity.lead} {normalizeActivityTitle(activity.rest)}</strong>
           <p>{activity.explicatie}</p>
@@ -108,6 +109,23 @@ function DocumentHtmlPreview({ data, type }: { data: PlanificareInput; type: Doc
     <p><strong>Tema anuală de studiu:</strong> {data.temaAnuala}</p>
     <p><strong>Tema proiectului:</strong> {data.temaProiect}</p>
     <p><strong>Tema săptămânală:</strong> {data.temaSaptamanala}</p>
+    <div className="preview-mobile-list">
+      {data.zile.map(day => (
+        <section key={day.ziua} className="preview-mobile-day">
+          <h4>{day.ziua}</h4>
+          <AgendaPreview agenda={day.agenda} />
+          {intervalsForDay(day.activitati).map(interval => {
+            const activities = day.activitati.filter(activity => activity.interval === interval);
+            return (
+              <article key={`${day.ziua}-${interval}`}>
+                <strong>{interval}</strong>
+                {activities.map((activity, index) => <p key={index}><b>{activity.lead}</b> {normalizeActivityTitle(activity.rest)}</p>)}
+              </article>
+            );
+          })}
+        </section>
+      ))}
+    </div>
     <div className="preview-table-wrap">
       <table className="preview-table">
         <thead>
@@ -129,4 +147,18 @@ function DocumentHtmlPreview({ data, type }: { data: PlanificareInput; type: Doc
       </table>
     </div>
   </div>;
+}
+
+function AgendaPreview({ agenda }: { agenda?: PlanificareInput["zile"][number]["agenda"] }) {
+  const entries = [
+    ["Obiectiv", agenda?.obiectiv],
+    ["Materiale", agenda?.materiale],
+    ["Notițe", agenda?.notite],
+  ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
+  if (!entries.length) return null;
+  return (
+    <div className="preview-agenda">
+      {entries.map(([label, value]) => <p key={label}><strong>{label}:</strong> {value}</p>)}
+    </div>
+  );
 }

@@ -54,6 +54,22 @@ function leadP(lead: string, rest: string) {
   });
 }
 
+function agendaParagraphs(agenda: DayActivities["agenda"]) {
+  const entries = [
+    ["Obiectivul zilei: ", agenda?.obiectiv],
+    ["Materiale de pregătit: ", agenda?.materiale],
+    ["Notițe: ", agenda?.notite],
+  ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].trim().length > 0);
+  if (!entries.length) return [];
+  return [
+    new Paragraph({
+      spacing: { before: 80, after: 60 },
+      children: [new TextRun({ text: "Agenda zilei", bold: true, size: 21, font: FONT })],
+    }),
+    ...entries.map(([lead, rest]) => leadP(lead, rest)),
+  ];
+}
+
 const borders = {
   top: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
   bottom: { style: BorderStyle.SINGLE, size: 4, color: "000000" },
@@ -221,6 +237,7 @@ export async function buildGhidDocx(data: PlanificareInput): Promise<Buffer> {
         children: [new TextRun({ text: dayShortGuide(zi, data.temaSaptamanala), size: 20, font: FONT, italics: true })],
       })
     );
+    children.push(...agendaParagraphs(zi.agenda));
     for (const a of zi.activitati) {
       children.push(
         new Paragraph({

@@ -9,18 +9,44 @@ import { DAYS, INTERVALS, intervalSortValue, intervalsForDay, validDays } from "
 import { activityBadge, normalizeActivityTitle } from "@/lib/activity-format";
 
 const GRUPE = ["Grupa mică (3-4 ani)", "Grupa mijlocie (4-5 ani)", "Grupa mare (5-6 ani)", "Grupa pregătitoare (6-7 ani)"];
+const THEME_MODES = [
+  { value: "white", label: "White" },
+  { value: "pink", label: "Pink" },
+  { value: "dark", label: "Dark" },
+] as const;
 type ActivityField = "lead" | "rest" | "explicatie" | "interval";
+type AgendaField = "obiectiv" | "materiale" | "notite";
 type PlanningField = "temaAnuala" | "temaProiect" | "temaSaptamanala" | "ideiUtilizator";
+type ThemeMode = typeof THEME_MODES[number]["value"];
+type SavedPlanData = {
+  temaAnuala: string;
+  temaProiect: string;
+  temaSaptamanala: string;
+  saptamana: string;
+  grupa: string;
+  ideiUtilizator: string;
+  zile: DayActivities[];
+  selectedDays: string[];
+};
+type SavedPlan = {
+  id: string;
+  savedAt: string;
+  title: string;
+  data: SavedPlanData;
+};
 type RateLimitState = {
   message: string;
   retryAfterMs: number;
   until: number;
   provider?: string;
 };
+const HISTORY_KEY = "planning-history-v1";
+const HISTORY_LIMIT = 10;
 
 export default function Dashboard() {
   const router = useRouter();
   const [aiReady, setAiReady] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("white");
 
   const [temaAnuala, setTemaAnuala] = useState("");
   const [temaProiect, setTemaProiect] = useState("");
@@ -43,6 +69,17 @@ export default function Dashboard() {
   const [fieldSuggestions, setFieldSuggestions] = useState<Partial<Record<PlanningField, string[]>>>({});
   const [rateLimit, setRateLimit] = useState<RateLimitState | null>(null);
   const [rateLimitClock, setRateLimitClock] = useState(Date.now());
+  const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("planning-theme");
+    if (saved === "white" || saved === "pink" || saved === "dark") setThemeMode(saved);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    localStorage.setItem("planning-theme", themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     try {
@@ -56,6 +93,16 @@ export default function Dashboard() {
       }
     } catch { setDraftStatus("Planificarea locală nu a putut fi restaurată."); }
     setDraftLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      if (!Array.isArray(saved)) return;
+      setSavedPlans(saved.filter(isSavedPlan).slice(0, HISTORY_LIMIT));
+    } catch {
+      setSavedPlans([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -210,6 +257,17 @@ export default function Dashboard() {
     });
   }
 
+  function updateDayAgenda(dayIndex: number, field: AgendaField, value: string) {
+    setZile((current) => {
+      if (!current) return current;
+      return current.map((zi, ziIndex) =>
+        ziIndex === dayIndex
+          ? { ...zi, agenda: { ...(zi.agenda || {}), [field]: value } }
+          : zi
+      );
+    });
+  }
+
   function removeActivity(dayIndex: number, activityIndex: number) {
     setZile((current) => {
       if (!current) return current;
@@ -241,6 +299,51 @@ export default function Dashboard() {
       ideiUtilizator: ideiUtilizator.trim(),
       zile,
     };
+  }
+
+  function currentPlanData(): SavedPlanData | null {
+    if (!zile) return null;
+    return { temaAnuala, temaProiect, temaSaptamanala, saptamana, grupa, ideiUtilizator, zile, selectedDays };
+  }
+
+  function persistHistory(next: SavedPlan[]) {
+    const trimmed = next.slice(0, HISTORY_LIMIT);
+    setSavedPlans(trimmed);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(trimmed));
+  }
+
+  function saveCurrentPlan() {
+    const data = currentPlanData();
+    if (!data) return;
+    const savedAt = new Date().toISOString();
+    const title = `${temaSaptamanala.trim() || "Planificare"} · ${saptamana.trim() || "Săptămână"}`;
+    const item: SavedPlan = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`,
+      savedAt,
+      title,
+      data,
+    };
+    persistHistory([item, ...savedPlans]);
+    setDraftStatus("Planificarea a fost salvată în istoric.");
+  }
+
+  function loadSavedPlan(plan: SavedPlan) {
+    setTemaAnuala(plan.data.temaAnuala);
+    setTemaProiect(plan.data.temaProiect);
+    setTemaSaptamanala(plan.data.temaSaptamanala);
+    setSaptamana(plan.data.saptamana);
+    setGrupa(plan.data.grupa);
+    setIdeiUtilizator(plan.data.ideiUtilizator);
+    setZile(plan.data.zile);
+    const pickedDays = plan.data.selectedDays.filter(day => DAYS.includes(day));
+    setSelectedDays(pickedDays.length ? pickedDays : plan.data.zile.map(day => day.ziua));
+    setOpenDays(Object.fromEntries(plan.data.zile.map(day => [day.ziua, false])));
+    setMessage(`Am încărcat "${plan.title}" din istoric.`);
+    setError("");
+  }
+
+  function deleteSavedPlan(id: string) {
+    persistHistory(savedPlans.filter(plan => plan.id !== id));
   }
 
   async function suggestField(field: PlanningField) {
@@ -316,7 +419,7 @@ export default function Dashboard() {
         if (!current) return current;
         return current.map((zi, ziIndex) => {
           if (ziIndex !== dayIndex) return zi;
-          if (scope === "day") return data.day;
+          if (scope === "day") return { ...data.day, agenda: zi.agenda };
           if (scope === "interval") {
             return {
               ...zi,
@@ -346,7 +449,7 @@ export default function Dashboard() {
     <main className="app-shell">
       <header className="app-header">
         <div className="brand-lockup"><span className="brand-mark" aria-hidden="true">✿</span><div><p className="eyebrow">SPAȚIU DE LUCRU</p><h1>Planificare Grădiniță</h1></div></div>
-        <AiSettings onReady={setAiReady} />
+        <ThemeModeSwitcher value={themeMode} onChange={setThemeMode} />
         <button onClick={handleLogout} style={styles.linkBtn}>Ieși din cont</button>
       </header>
 
@@ -380,8 +483,11 @@ export default function Dashboard() {
           onUse={applySuggestion}
         />
 
-        {!aiReady && <p>Deschide „Setări AI” și salvează cheia pentru a genera activități.</p>}
-        <button style={styles.primaryBtn} onClick={handleGenerate} disabled={loading || !temaSaptamanala || !aiReady || isRateLimited}>
+        <div className="ai-inline-row">
+          {!aiReady && <p>Deschide setările AI și salvează cheia pentru a genera activități.</p>}
+          <AiSettings onReady={setAiReady} variant="inline" />
+        </div>
+        <button className="generate-button" style={styles.primaryBtn} onClick={handleGenerate} disabled={loading || !temaSaptamanala || !aiReady || isRateLimited}>
           {loading ? "AI-ul lucrează..." : isRateLimited ? `Așteaptă ${formatWait(rateLimitRemainingMs)}` : "✨ Generează planificarea"}
         </button>
         {isRateLimited && rateLimit && (
@@ -402,9 +508,19 @@ export default function Dashboard() {
         {message && <div style={styles.success}>{message}</div>}
       </section>
 
+      {(zile || savedPlans.length > 0) && (
+        <PlanningHistory
+          plans={savedPlans}
+          canSave={!!zile}
+          onSave={saveCurrentPlan}
+          onLoad={loadSavedPlan}
+          onDelete={deleteSavedPlan}
+        />
+      )}
+
       {zile && (
         <section className="form-section results-section">
-          <div style={styles.resultHeader}>
+          <div className="result-toolbar" style={styles.resultHeader}>
             <div>
               <h2 style={styles.h2}>2. Rezultat editabil</h2>
               <p style={styles.muted}>{totalActivitati} activități în {zile.length} zile. Editează ideile, apoi previzualizează și descarcă documentele zilnice.</p>
@@ -431,6 +547,38 @@ export default function Dashboard() {
                 >
                   {busyAction === `day-${zi.ziua}--all` ? "Se regenerează..." : "Regenerare zi"}
                 </button>
+                {isOpen && (
+                  <div className="day-agenda">
+                    <div className="day-agenda-heading">
+                      <strong>Agenda zilei</strong>
+                      <span>lucruri de ținut minte pentru tine</span>
+                    </div>
+                    <label>
+                      Obiectivul zilei
+                      <input
+                        value={zi.agenda?.obiectiv || ""}
+                        onChange={(event) => updateDayAgenda(ziIndex, "obiectiv", event.target.value)}
+                        placeholder="ex: Copiii recunosc și numesc emoțiile de bază."
+                      />
+                    </label>
+                    <label>
+                      Materiale de pregătit
+                      <textarea
+                        value={zi.agenda?.materiale || ""}
+                        onChange={(event) => updateDayAgenda(ziIndex, "materiale", event.target.value)}
+                        placeholder="ex: cartonașe cu emoții, oglindă, coli colorate, lipici"
+                      />
+                    </label>
+                    <label>
+                      Notițe / lucruri importante
+                      <textarea
+                        value={zi.agenda?.notite || ""}
+                        onChange={(event) => updateDayAgenda(ziIndex, "notite", event.target.value)}
+                        placeholder="ex: insist pe exprimarea calmă, păstrez 5 minute pentru reflecție"
+                      />
+                    </label>
+                  </div>
+                )}
                 {isOpen && intervalsForDay(zi.activitati).map(interval => {
                   const intervalActivities = zi.activitati.filter(activity => activity.interval === interval);
                   return (
@@ -456,7 +604,7 @@ export default function Dashboard() {
                               value={a.interval}
                               onChange={(value) => updateActivity(ziIndex, activityIndex, "interval", value)}
                             />
-                            <div style={styles.activityRow}>
+                            <div className="activity-edit-row" style={styles.activityRow}>
                               <input
                                 aria-label={`Etichetă ${zi.ziua} activitatea ${activityIndex + 1}`}
                                 style={{ ...styles.input, ...styles.leadInput }}
@@ -497,6 +645,86 @@ export default function Dashboard() {
       )}
     </main>
   );
+}
+
+function PlanningHistory({
+  plans,
+  canSave,
+  onSave,
+  onLoad,
+  onDelete,
+}: {
+  plans: SavedPlan[];
+  canSave: boolean;
+  onSave: () => void;
+  onLoad: (plan: SavedPlan) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <section className="planning-history" aria-labelledby="history-title">
+      <div>
+        <p className="eyebrow">ISTORIC LOCAL</p>
+        <h2 id="history-title">Planificări salvate</h2>
+        <p>Salvează variantele bune și revino la ele fără să pierzi ce ai lucrat.</p>
+      </div>
+      <button type="button" className="history-save" disabled={!canSave} onClick={onSave}>
+        Salvează în istoric
+      </button>
+      {plans.length > 0 ? (
+        <div className="history-list">
+          {plans.map(plan => (
+            <article key={plan.id} className="history-item">
+              <div>
+                <strong>{plan.title}</strong>
+                <span>{plan.data.grupa} · {formatSavedDate(plan.savedAt)}</span>
+              </div>
+              <div className="history-actions">
+                <button type="button" onClick={() => onLoad(plan)}>Încarcă</button>
+                <button type="button" className="danger" onClick={() => onDelete(plan.id)}>Șterge</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="history-empty">Nu ai încă planificări salvate în acest browser.</p>
+      )}
+    </section>
+  );
+}
+
+function ThemeModeSwitcher({ value, onChange }: { value: ThemeMode; onChange: (value: ThemeMode) => void }) {
+  return (
+    <div className="theme-switcher" role="group" aria-label="Alege tema vizuală">
+      {THEME_MODES.map(mode => (
+        <button
+          key={mode.value}
+          type="button"
+          className={value === mode.value ? "active" : ""}
+          aria-pressed={value === mode.value}
+          onClick={() => onChange(mode.value)}
+        >
+          {mode.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function isSavedPlan(value: any): value is SavedPlan {
+  const data = value?.data;
+  return typeof value?.id === "string" &&
+    typeof value?.savedAt === "string" &&
+    typeof value?.title === "string" &&
+    data &&
+    validDays(data.zile) &&
+    [data.temaAnuala, data.temaProiect, data.temaSaptamanala, data.saptamana, data.grupa, data.ideiUtilizator].every(item => typeof item === "string") &&
+    Array.isArray(data.selectedDays);
+}
+
+function formatSavedDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "dată necunoscută";
+  return new Intl.DateTimeFormat("ro-RO", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
 function Field({
