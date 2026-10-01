@@ -455,6 +455,16 @@ export default function Dashboard() {
 
       <section className="workspace-intro"><div><p className="eyebrow">PLANIFICARE SĂPTĂMÂNALĂ</p><h2>O săptămână bine pregătită<br className="desktop-break" /> începe cu o idee.</h2><p>Adună temele, adaptează activitățile și pregătește documentele pentru grupă.</p><a className="example-download" href="/api/example-docx">Descarcă exemplul Word</a></div><div className="week-stamp day-picker" aria-label="Alege zilele pentru generare">{DAYS.map(day => <button key={day} type="button" className={selectedDays.includes(day) ? "selected" : ""} onClick={() => toggleSelectedDay(day)}>{day.slice(0, 2)}</button>)}</div></section>
 
+      <AiSettings onReady={setAiReady} variant="hidden" />
+
+      <PlanningHistory
+        plans={savedPlans}
+        canSave={!!zile}
+        onSave={saveCurrentPlan}
+        onLoad={loadSavedPlan}
+        onDelete={deleteSavedPlan}
+      />
+
       <section className="form-section">
         <div className="section-heading"><span className="step-number">01</span><div><h2>Planificarea săptămânii</h2><p>Completează contextul grupei și al temei.</p></div></div>
         <div style={styles.grid2}>
@@ -483,12 +493,8 @@ export default function Dashboard() {
           onUse={applySuggestion}
         />
 
-        <div className="ai-inline-row">
-          {!aiReady && <p>Deschide setările AI și salvează cheia pentru a genera activități.</p>}
-          <AiSettings onReady={setAiReady} variant="inline" />
-        </div>
         <button className="generate-button" style={styles.primaryBtn} onClick={handleGenerate} disabled={loading || !temaSaptamanala || !aiReady || isRateLimited}>
-          {loading ? "AI-ul lucrează..." : isRateLimited ? `Așteaptă ${formatWait(rateLimitRemainingMs)}` : "✨ Generează planificarea"}
+          {loading ? "AI-ul lucrează..." : isRateLimited ? `Așteaptă ${formatWait(rateLimitRemainingMs)}` : !aiReady ? "AI neconfigurat" : "✨ Generează planificarea"}
         </button>
         {isRateLimited && rateLimit && (
           <RateLimitNotice
@@ -507,16 +513,6 @@ export default function Dashboard() {
         {error && <div style={styles.error}>{error}</div>}
         {message && <div style={styles.success}>{message}</div>}
       </section>
-
-      {(zile || savedPlans.length > 0) && (
-        <PlanningHistory
-          plans={savedPlans}
-          canSave={!!zile}
-          onSave={saveCurrentPlan}
-          onLoad={loadSavedPlan}
-          onDelete={deleteSavedPlan}
-        />
-      )}
 
       {zile && (
         <section className="form-section results-section">

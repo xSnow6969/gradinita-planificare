@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 
-export default function AiSettings({ onReady, variant = "header" }: { onReady: (ready: boolean) => void; variant?: "header" | "inline" }) {
+export default function AiSettings({ onReady, variant = "header" }: { onReady: (ready: boolean) => void; variant?: "header" | "inline" | "hidden" }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [configured, setConfigured] = useState(false);
   const [source, setSource] = useState<"server" | "browser" | null>(null);
@@ -43,7 +43,9 @@ export default function AiSettings({ onReady, variant = "header" }: { onReady: (
     finally { setBusy(false); }
   }
   return <>
-    <button className={variant === "inline" ? "settings-trigger settings-trigger-inline" : "settings-trigger"} type="button" onClick={() => { setError(""); dialog.current?.showModal(); }}>AI <span>Setări AI</span></button>
+    {variant !== "hidden" && (
+      <button className={variant === "inline" ? "settings-trigger settings-trigger-inline" : "settings-trigger"} type="button" onClick={() => { setError(""); dialog.current?.showModal(); }}>AI <span>Setări AI</span></button>
+    )}
     <dialog className="ai-dialog" ref={dialog} aria-labelledby="ai-title" onClose={() => setApiKey("")}>
       <form onSubmit={save} style={{ display: "grid", gap: 16 }}>
         <h2 id="ai-title" style={{ margin: 0 }}>Configurează asistentul AI</h2>
